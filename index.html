@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AL-RAHAF | Online Fashion Store</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root { --primary: #b85c74; --dark: #222; --light: #f9f9f9; }
+    body { font-family: system-ui, sans-serif; margin: 0; background: var(--light); color: var(--dark); padding-bottom: 60px; }
+    header { background: white; padding: 15px 5%; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.05); sticky: top; }
+    h1 { margin: 0; color: var(--primary); letter-spacing: 1px; cursor: pointer; }
+    .nav-buttons button { background: none; border: 1px solid #ccc; padding: 8px 15px; margin-left: 10px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+    .nav-buttons .accent { background: var(--primary); color: white; border: none; }
+    
+    /* Layouts */
+    .container { max-width: 1200px; margin: 30px auto; padding: 0 20px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 25px; }
+    
+    /* Product Cards (Flipkart Style) */
+    .card { background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 3px 10px rgba(0,0,0,0.03); border: 1px solid #eee; display: flex; flex-direction: column; }
+    .card img { width: 100%; height: 260px; object-fit: cover; background: #eaeaea; }
+    .card-info { padding: 15px; flex-grow: 1; display: flex; flex-direction: column; justify-content: space-between; }
+    .title { font-size: 1rem; font-weight: 600; margin: 0 0 5px 0; }
+    .pricing { margin: 8px 0; }
+    .selling-price { font-size: 1.2rem; font-weight: bold; color: #111; }
+    .mrp { text-decoration: line-through; color: #777; font-size: 0.9rem; margin-left: 8px; }
+    .discount { color: #388e3c; font-size: 0.9rem; font-weight: bold; margin-left: 8px; }
+    .stock-tag { font-size: 0.8rem; font-weight: bold; margin-bottom: 8px; }
+    .in-stock { color: #388e3c; } .out-stock { color: #d32f2f; }
+    .add-to-cart-btn { width: 100%; background: #ff9f00; color: white; border: none; padding: 10px; font-weight: bold; cursor: pointer; border-radius: 4px; }
+    
+    /* Modals & Overlays */
+    .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 100; }
+    .modal-content { background: white; padding: 30px; border-radius: 8px; width: 450px; max-width: 90%; max-height: 85vh; overflow-y: auto; }
+    .form-group { margin-bottom: 15px; }
+    .form-group label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 0.9rem; }
+    .form-group input, .form-group textarea, .form-group select { width: 100%; padding: 10px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1 onclick="showView('home')">AL-RAHAF</h1>
+    <div class="nav-buttons">
+      <button onclick="openAuthModal()" id="authBtn">Login / Sign Up</button>
+      <button class="accent" onclick="openCartModal()">Cart (<span id="cartCount">0</span>)</button>
+      <button onclick="openAdminGate()" style="border-style: dashed;">Manager</button>
+    </div>
+  </header>
+
+  <div class="container view" id="homeView">
+    <h2 style="margin-bottom: 20px;">Trending Fashion</h2>
+    <div class="grid" id="productsGrid"></div>
+  </div>
+
+  <div id="authModal" class="modal">
+    <div class="modal-content">
+      <h3 id="authTitle">Verify Mobile Number</h3>
+      <div id="phoneStep">
+        <div class="form-group">
+          <label>Phone Number (with Country Code):</label>
+          <input type="tel" id="authPhone" placeholder="+919999999999">
+        </div>
+        <button class="add-to-cart-btn" onclick="sendOTP()">Send OTP</button>
+      </div>
+      <div id="otpStep" style="display:none;">
+        <div class="form-group">
+          <label>Enter 6-Digit OTP:</label>
+          <input type="text" id="authOTP" placeholder="123456">
+        </div>
+        <button class="add-to-cart-btn" style="background:#2874f0;" onclick="verifyOTP()">Verify & Login</button>
+      </div>
+      <button onclick="closeModal('authModal')" style="margin-top:15px; width:100%; background:#eee; border:none; padding:10px; cursor:pointer;">Cancel</button>
+    </div>
+  </div>
+
+  <div id="cartModal" class="modal">
+    <div class="modal-content">
+      <h3>Your Shopping Bag</h3>
+      <div id="cartItemsList"></div>
+      <hr>
+      <h4 id="cartTotalDisplay">Total: $0.00</h4>
+      <button class="add-to-cart-btn" style="background:#fb641b;" onclick="checkoutOrder()">Confirm Order (Cash on Delivery)</button>
+      <button onclick="closeModal('cartModal')" style="margin-top:10px; width:100%; background:#eee; border:none; padding:10px; cursor:pointer;">Continue Shopping</button>
+    </div>
+  </div>
+
+  <div id="adminGateModal" class="modal">
+    <div class="modal-content">
+      <h3>Manager Gateway Verification</h3>
+      <div class="form-group">
+        <label>Manager Control Email:</label>
+        <input type="email" id="gateEmail" placeholder="amansiddi8388@gmail.com">
+      </div>
+      <button class="add-to-cart-btn" onclick="verifyAdminEmail()">Validate Access</button>
+      <button onclick="closeModal('adminGateModal')" style="margin-top:10px; width:100%; background:#eee; border:none; padding:10px; cursor:pointer;">Exit</button>
+    </div>
+  </div>
+
+  <div id="adminPanelModal" class="modal">
+    <div class="modal-content">
+      <h3>AL-RAHAF Inventory Control</h3>
+      <hr>
+      <div class="form-group">
+        <label>Item Name:</label>
+        <input type="text" id="pName">
+      </div>
+      <div class="form-group">
+        <label>Description:</label>
+        <textarea id="pDesc" rows="2"></textarea>
+      </div>
+      <div class="form-group">
+        <label>Maximum Retail Price (MRP):</label>
+        <input type="number" id="pMrp">
+      </div>
+      <div class="form-group">
+        <label>Discount Percentage (%):</label>
+        <input type="number" id="pDiscount" value="0">
+      </div>
+      <div class="form-group">
+        <label>Stock Quantity:</label>
+        <input type="number" id="pStock" value="10">
+      </div>
+      <div class="form-group">
+        <label>Product Cover Image File:</label>
+        <input type="file" id="pImageFile" accept="image/*">
+      </div>
+      <button class="add-to-cart-btn" style="background:#2874f0;" onclick="uploadProduct()">Save & Post Product</button>
+      <button onclick="closeModal('adminPanelModal')" style="margin-top:10px; width:100%; background:#666; color:white; border:none; padding:10px; cursor:pointer;">Close Dashboard</button>
+    </div>
+  </div>
+
+  <script>
+    // Config credentials
+    const SUPABASE_URL = "YOUR_SUPABASE_URL";
+    const SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY";
+    const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    const TARGET_ADMIN = "amansiddi8388@gmail.com";
+    let cart = [];
+    let currentUserPhone = null;
+
+    window.onload = function() {
+      fetchProducts();
+      checkSession();
+    };
+
+    async function checkSession() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if(user && user.phone) {
+        currentUserPhone = user.phone;
+        document.getElementById('authBtn').innerText = `Logout (${user.phone})`;
+        document.getElementById('authBtn').setAttribute('onclick', 'logout()');
+      }
+    }
+
+    async function fetchProducts() {
+      const { data, error } = await supabase.from('products').select('*').order('created_at', { ascending: false });
+      if (error) return console.error(error);
+      
+      const grid = document.getElementById('productsGrid');
+      grid.innerHTML = '';
+      
+      data.forEach(p => {
+        const discountAmt = (p.mrp * (p.discount / 100));
+        const finalPrice = (p.mrp - discountAmt).toFixed(2);
+        const hasStock = p.stock > 0;
+
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.innerHTML = `
+          <img src="${p.image_url || 'https://via.placeholder.com/300'}" alt="${p.name}">
+          <div class="card-info">
+            <div>
+              <div class="title">${p.name}</div>
+              <div class="stock-tag ${hasStock ? 'in-stock' : 'out-stock'}">${hasStock ? 'In Stock' : 'Out of Stock'}</div>
+              <p style="font-size:0.85rem; color:#666; margin:0;">${p.description || ''}</p>
+            </div>
+            <div>
+              <div class="pricing">
+                <span class="selling-price">$${finalPrice}</span>
+                ${p.discount > 0 ? `<span class="mrp">$${p.mrp}</span><span class="discount">${p.discount}% off</span>` : ''}
+              </div>
+              <button class="add-to-cart-btn" ${!hasStock ? 'disabled style="background:#ccc;"' : ''} onclick="addToCart('${p.id}', '${p.name}', ${finalPrice})">
+                ${hasStock ? 'ADD TO CART' : 'OUT OF STOCK'}
+              </button>
+            </div>
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+    }
+
+    // AUTH ACTIONS
+    async function sendOTP() {
+      const phone = document.getElementById('authPhone').value.trim();
+      const { data, error } = await supabase.auth.signInWithOtp({ phone: phone });
+      if(error) return alert(error.message);
+      
+      document.getElementById('phoneStep').style.display = 'none';
+      document.getElementById('otpStep').style.display = 'block';
+      alert("OTP code successfully pushed to your handset.");
+    }
+
+    async function verifyOTP() {
+      const phone = document.getElementById('authPhone').value.trim();
+      const token = document.getElementById('authOTP').value.trim();
+      
+      const { data, error } = await supabase.auth.verifyOtp({ phone, token, type: 'sms' });
+      if(error) return alert(error.message);
+
+      alert("Welcome to AL-RAHAF!");
+      location.reload();
+    }
+
+    async function logout() {
+      await supabase.auth.signOut();
+      location.reload();
+    }
+
+    // MANAGER ENGINE ACTIONS
+    function verifyAdminEmail() {
+      const email = document.getElementById('gateEmail').value.trim().toLowerCase();
+      if(email === TARGET_ADMIN.toLowerCase()) {
+        closeModal('adminGateModal');
+        openModal('adminPanelModal');
+      } else {
+        alert("Access Denied.");
+      }
+    }
+
+    async function uploadProduct() {
+      const name = document.getElementById('pName').value.trim();
+      const desc = document.getElementById('pDesc').value.trim();
+      const mrp = parseFloat(document.getElementById('pMrp').value);
+      const discount = parseFloat(document.getElementById('pDiscount').value) || 0;
+      const stock = parseInt(document.getElementById('pStock').value) || 0;
+      const fileInput = document.getElementById('pImageFile').files[0];
+
+      if(!name || !mrp || !fileInput) return alert("Fill required inputs & attach a product image file.");
+
+      // Upload image to Supabase Bucket Storage
+      const fileExt = fileInput.name.split('.').pop();
+      const fileName = `${Math.random()}.${fileExt}`;
+      const { data: uploadData, error: uploadErr } = await supabase.storage.from('product-images').upload(fileName, fileInput);
+      
+      if(uploadErr) return alert("Storage Upload Failed: " + uploadErr.message);
+
+      // Extract Public Access URL
+      const { data: urlData } = supabase.storage.from('product-images').getPublicUrl(fileName);
+      const imageUrl = urlData.publicUrl;
+
+      // Add record to database
+      const { error: dbErr } = await supabase.from('products').insert([{ name, description: desc, mrp, discount, stock, image_url: imageUrl }]);
+      
+      if(dbErr) return alert(dbErr.message);
+
+      alert("Product published!");
+      closeModal('adminPanelModal');
+      fetchProducts();
+    }
+
+    // CART & ORDER CHECKOUT
+    function addToCart(id, name, price) {
+      const existing = cart.find(item => item.id === id);
+      if(existing) { existing.qty += 1; } else { cart.push({ id, name, price, qty: 1 }); }
+      updateCartUI();
+    }
+
+    function updateCartUI() {
+      document.getElementById('cartCount').innerText = cart.reduce((acc, item) => acc + item.qty, 0);
+      const list = document.getElementById('cartItemsList');
+      list.innerHTML = '';
+      let total = 0;
+
+      cart.forEach(item => {
+        total += (item.price * item.qty);
+        list.innerHTML += `<div style="display:flex; justify-content:space-between; margin-bottom:10px;">
+          <span>${item.name} (x${item.qty})</span>
+          <span>$${(item.price * item.qty).toFixed(2)}</span>
+        </div>`;
+      });
+      document.getElementById('cartTotalDisplay').innerText = `Total: $${total.toFixed(2)}`;
+    }
+
+    async function checkoutOrder() {
+      if(!currentUserPhone) {
+        closeModal('cartModal');
+        return openAuthModal();
+      }
+      if(cart.length === 0) return alert("Your cart is empty.");
+
+      const total = cart.reduce((acc, item) => acc + (item.price * item.qty), 0);
+
+      const { error } = await supabase.from('orders').insert([
+        { user_phone: currentUserPhone, items: cart, total_amount: total }
+      ]);
+
+      if(error) return alert(error.message);
+
+      alert("Order Confirmed! Thank you for shopping with AL-RAHAF.");
+      cart = [];
+      updateCartUI();
+      closeModal('cartModal');
+    }
+
+    // HELPER CORE METHODS
+    function openModal(id) { document.getElementById(id).style.display = 'flex'; }
+    function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+    function openAuthModal() {
+      document.getElementById('phoneStep').style.display = 'block';
+      document.getElementById('otpStep').style.display = 'none';
+      openModal('authModal');
+    }
+    function openCartModal() { openModal('cartModal'); }
+    function openAdminGate() { openModal('adminGateModal'); }
+  </script>
+</body>
+        </html>
+  
